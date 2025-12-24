@@ -45,13 +45,10 @@
     margin-top: 56px; /* ← ヘッダー分ずらす */
 }
 
-#login-form, #report-form {
-    padding: 15px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    margin: 10px;
-    background: #fff;
+#login-form {
+    margin-top: 56px; /* ← 固定ヘッダー分下げる */
 }
+
 
 /* 🖊 ペンボタン */
 .pen-icon {
@@ -163,7 +160,9 @@ function logout() {
 }
 
 function initMap() {
-    const center = { lat: 36.3658, lng: 140.4764 };
+    const center = { lat: 36.3630, lng: 140.4570 };
+
+
 
     map = new google.maps.Map(document.getElementById("map"), {
         center,
