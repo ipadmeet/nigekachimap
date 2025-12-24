@@ -169,25 +169,25 @@ function initMap() {
         zoom: 16
     });
 
-    map.addListener("click", e => {
-        if (!auth.currentUser) {
-            alert("投稿にはログインが必要です");
-            return;
-        }
+   map.addListener("click", e => {
+    if (!auth.currentUser) {
+        return; // ← 何も表示せず終了
+    }
 
-        selectedLocation = {
-            lat: e.latLng.lat(),
-            lng: e.latLng.lng()
-        };
+    selectedLocation = {
+        lat: e.latLng.lat(),
+        lng: e.latLng.lng()
+    };
 
-        if (tempMarker) tempMarker.setMap(null);
+    if (tempMarker) tempMarker.setMap(null);
 
-        tempMarker = new google.maps.Marker({
-            position: selectedLocation,
-            map,
-            icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
-        });
+    tempMarker = new google.maps.Marker({
+        position: selectedLocation,
+        map,
+        icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
     });
+});
+
 
     listenForReports();
 }
