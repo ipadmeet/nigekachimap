@@ -88,7 +88,6 @@
 <!-- 🖊 ペンボタン -->
 <div class="pen-icon" onclick="toggleLoginUI()">✏️</div>
 
-<!-- 🔐 ログインUI -->
 <div id="login-form" style="display:none;">
     <input id="email" type="email" placeholder="メールアドレス" style="width:90%; margin-bottom:10px;"><br>
     <input id="password" type="password" placeholder="パスワード" style="width:90%; margin-bottom:10px;"><br>
@@ -97,23 +96,27 @@
     <p id="login-status"></p>
 </div>
 
-<!-- 📝 投稿フォーム -->
 <div id="report-form" style="display:none;">
+    <label><b>1. 地図上をクリックして場所を選択</b></label><br><br>
+    
     <label>日時</label><br>
     <input type="datetime-local" id="report-datetime" style="width:90%; margin-bottom:10px;"><br>
 
     <label>状況の詳細</label><br>
     <textarea id="description" rows="3" style="width:90%;"></textarea><br><br>
 
-    <button onclick="submitReport()">投稿する</button>
+    <label>画像（任意）</label><br>
+    <input type="file" id="image-input" accept="image/*" style="width:90%; margin-bottom:10px;"><br><br>
+
+    <button id="submit-btn" onclick="submitReport()" style="padding: 5px 10px;">投稿する</button>
 </div>
 
 <div id="map"></div>
 
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
 
 <script>
 const firebaseConfig = {
@@ -129,6 +132,7 @@ firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.firestore();
+const storage = firebase.storage();
 
 let map;
 let selectedLocation = null;
@@ -145,14 +149,15 @@ auth.onAuthStateChanged(user => {
         document.getElementById("login-status").textContent = "ログイン中";
     } else {
         document.getElementById("report-form").style.display = "none";
-        document.getElementById("login-status").textContent =
-            "投稿できるのはニゲカチのメンバーだけです。危険情報を共有いただける方はお問合せよりお伝えください。";
+        document.getElementById("login-status").textContent = "投稿できるのはメンバーのみです。";
     }
 });
 
 function login() {
-    auth.signInWithEmailAndPassword(email.value, password.value)
-        .catch(() => alert("ログイン失敗"));
+    auth.signInWithEmailAndPassword(
+        document.getElementById("email").value,
+        document.getElementById("password").value
+    ).catch(() => alert("ログイン失敗"));
 }
 
 function logout() {
@@ -160,34 +165,25 @@ function logout() {
 }
 
 function initMap() {
-    const center = { lat: 36.3640, lng: 140.4570 };
-
-
-
+    const center = { lat: 36.3680, lng: 140.4600 };
     map = new google.maps.Map(document.getElementById("map"), {
-        center,
+        center: center,
         zoom: 16
     });
 
-   map.addListener("click", e => {
-    if (!auth.currentUser) {
-        return; // ← 何も表示せず終了
-    }
-
-    selectedLocation = {
-        lat: e.latLng.lat(),
-        lng: e.latLng.lng()
-    };
-
-    if (tempMarker) tempMarker.setMap(null);
-
-    tempMarker = new google.maps.Marker({
-        position: selectedLocation,
-        map,
-        icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
+    map.addListener("click", e => {
+        if (!auth.currentUser) {
+            alert("投稿にはログインが必要です");
+            return;
+        }
+        selectedLocation = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+        if (tempMarker) tempMarker.setMap(null);
+        tempMarker = new google.maps.Marker({
+            position: selectedLocation,
+            map: map,
+            icon: "http://maps.google.com/mapfiles/ms/icons/blue-pushpin.png"
+        });
     });
-});
-
 
     listenForReports();
 }
@@ -197,23 +193,24 @@ function listenForReports() {
         snapshot.docChanges().forEach(change => {
             if (change.type === "added") {
                 const d = change.doc.data();
-
                 const marker = new google.maps.Marker({
                     position: { lat: d.latitude, lng: d.longitude },
-                    map,
-                    icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
+                    map: map
                 });
 
-                const time = d.reportTimestamp
-                    ? new Date(d.reportTimestamp.toDate()).toLocaleString()
-                    : "不明";
+                const time = d.reportTimestamp ? new Date(d.reportTimestamp.toDate()).toLocaleString() : "不明";
+                const imageHtml = d.imageUrl ? `<img src="${d.imageUrl}" class="preview">` : "";
 
                 const info = new google.maps.InfoWindow({
                     content: `
-                        <h3>危険箇所</h3>
-                        <strong>日時:</strong> ${time}<br>
-                        <strong>詳細:</strong> ${d.description}<br>
-                        <strong>投稿者:</strong> ${d.username}
+                        <div style="max-width:200px;">
+                            <h3 style="margin:0 0 5px 0;">危険箇所</h3>
+                            <small>${time}</small><br>
+                            <p style="margin:5px 0;">${d.description}</p>
+                            ${imageHtml}
+                            <hr>
+                            <small>投稿者: ${d.username}</small>
+                        </div>
                     `
                 });
 
@@ -223,27 +220,55 @@ function listenForReports() {
     });
 }
 
-function submitReport() {
+async function submitReport() {
+    const btn = document.getElementById("submit-btn");
+    const descInput = document.getElementById("description");
+    const fileInput = document.getElementById("image-input");
+
     if (!auth.currentUser) return alert("ログインしてください");
-    if (!selectedLocation) return alert("地図をクリックしてください");
-    if (!description.value.trim()) return alert("状況を入力してください");
+    if (!selectedLocation) return alert("地図をクリックして場所を指定してください");
+    if (!descInput.value.trim()) return alert("状況を入力してください");
 
-    const dateValue = document.getElementById("report-datetime").value;
-    const date = dateValue ? new Date(dateValue) : new Date();
+    btn.disabled = true;
+    btn.textContent = "送信中...";
 
-    db.collection("reports").add({
-        latitude: selectedLocation.lat,
-        longitude: selectedLocation.lng,
-        description: description.value,
-        username: "ニゲカチ",
-        reportTimestamp: firebase.firestore.Timestamp.fromDate(date),
-        created: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    try {
+        let imageUrl = "";
+        const file = fileInput.files[0];
+        
+        // 画像アップロード処理
+        if (file) {
+            const storageRef = storage.ref(`reports/${Date.now()}_${file.name}`);
+            const snapshot = await storageRef.put(file);
+            imageUrl = await snapshot.ref.getDownloadURL();
+        }
 
-    alert("投稿しました");
-    description.value = "";
-    if (tempMarker) tempMarker.setMap(null);
-    selectedLocation = null;
+        const dateValue = document.getElementById("report-datetime").value;
+        const date = dateValue ? new Date(dateValue) : new Date();
+
+        await db.collection("reports").add({
+            latitude: selectedLocation.lat,
+            longitude: selectedLocation.lng,
+            description: descInput.value,
+            imageUrl: imageUrl,
+            username: "ニゲカチ",
+            reportTimestamp: firebase.firestore.Timestamp.fromDate(date),
+            created: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        alert("投稿しました");
+        descInput.value = "";
+        fileInput.value = "";
+        if (tempMarker) tempMarker.setMap(null);
+        selectedLocation = null;
+
+    } catch (error) {
+        console.error(error);
+        alert("エラーが発生しました: " + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "投稿する";
+    }
 }
 </script>
 
