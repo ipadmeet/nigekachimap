@@ -28,11 +28,10 @@
     font-weight: bold;
 }
 
-/* 📍 ヘッダー内の右下リンク */
 #header-copy {
     position: absolute;
     right: 10px;
-    bottom: 2px; /* ヘッダー内の下側に配置 */
+    bottom: 2px;
     font-size: 14px;
     line-height: 1;
 }
@@ -47,10 +46,10 @@
     text-decoration: underline;
 }
 
-/* 🔍 右上の操作パネル（検索＋ペン） */
+/* 🔍 右上の操作パネル */
 #action-controls {
     position: fixed;
-    top: 36px;
+    top: 46px; 
     right: 15px;
     display: flex;
     align-items: center;
@@ -71,7 +70,7 @@
     padding: 4px 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    width: 120px;
+    width: 100px;
     font-size: 12px;
 }
 
@@ -104,7 +103,6 @@
     margin-top: 14px !important;
 }
 
-/* 📸 吹き出し内の画像スタイル */
 .preview {
     width: 100px;
     height: auto;
@@ -121,7 +119,7 @@
 
 .form-window {
     position: fixed;
-    top: 90px;
+    top: 95px;
     right: 15px;
     background: white;
     padding: 15px;
@@ -130,6 +128,47 @@
     z-index: 1003;
     width: 280px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* 📁 カスタムファイル選択ボタンのスタイル */
+.file-upload-wrapper {
+    margin-bottom: 10px;
+}
+
+#image-input {
+    display: none; /* 標準ボタンを隠す */
+}
+
+.custom-file-label {
+    display: inline-block;
+    padding: 4px 8px;
+    background: #f8f9fa;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.file-name-display {
+    font-size: 11px;
+    color: #666;
+    margin-left: 5px;
+}
+
+/* ボタンが並ぶエリア */
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+#logout-btn {
+    padding: 5px 10px;
+    background: #eee;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
 }
 </style>
 </head>
@@ -147,29 +186,38 @@
 
 <div id="action-controls">
     <div id="search-container">
-        <input type="text" id="address-input" placeholder="地名を入力">
+        <input type="text" id="address-input" placeholder="地名・郵便番号">
         <button id="search-btn" onclick="searchAddress()">検索</button>
     </div>
     <div class="pen-icon" onclick="toggleLoginUI()">✏️</div>
 </div>
 
 <div id="login-form" class="form-window" style="display:none;">
+    <label><b>ログイン</b></label><br><br>
     <input id="email" type="email" placeholder="メールアドレス" style="width:90%; margin-bottom:10px;"><br>
     <input id="password" type="password" placeholder="パスワード" style="width:90%; margin-bottom:10px;"><br>
     <button onclick="login()">ログイン</button>
-    <button onclick="logout()">ログアウト</button>
-    <p id="login-status" style="font-size:12px; color:#666;"></p>
+    <p id="login-status" style="font-size:12px; color:#666; margin-top:10px;"></p>
 </div>
 
 <div id="report-form" class="form-window" style="display:none; left: 15px; right: auto;">
-    <label><b>1. 地図をクリックして場所指定</b></label><br><br>
+   
     <label>日時</label><br>
     <input type="datetime-local" id="report-datetime" style="width:90%; margin-bottom:10px;"><br>
     <label>状況の詳細</label><br>
-    <textarea id="description" rows="3" style="width:90%;"></textarea><br><br>
+    <textarea id="description" rows="3" style="width:90%;"></textarea><br>
+    
     <label>画像（任意）</label><br>
-    <input type="file" id="image-input" accept="image/*" style="width:90%; margin-bottom:10px;"><br><br>
-    <button id="submit-btn" onclick="submitReport()" style="padding: 5px 10px;">投稿する</button>
+    <div class="file-upload-wrapper">
+        <label for="image-input" class="custom-file-label">ファイルを選択</label>
+        <span id="file-name" class="file-name-display">ファイル未選択</span>
+        <input type="file" id="image-input" accept="image/*" onchange="updateFileName()">
+    </div>
+
+    <div class="button-group">
+        <button id="submit-btn" onclick="submitReport()" style="padding: 5px 10px;">投稿する</button>
+        <button id="logout-btn" onclick="logout()">ログアウト</button>
+    </div>
 </div>
 
 <div id="map"></div>
@@ -217,13 +265,26 @@ function initMap() {
     });
 
     map.addListener("click", e => {
-        if (!auth.currentUser) { alert("ログインが必要です"); return; }
+        if (!auth.currentUser) { 
+            alert("投稿するにはログインが必要です。右上の✏️マークからログインしてください。"); 
+            return; 
+        }
         selectedLocation = { lat: e.latLng.lat(), lng: e.latLng.lng() };
         if (tempMarker) tempMarker.setMap(null);
         tempMarker = new google.maps.Marker({ position: selectedLocation, map: map });
     });
 
     listenForReports();
+}
+
+function updateFileName() {
+    const input = document.getElementById('image-input');
+    const display = document.getElementById('file-name');
+    if (input.files.length > 0) {
+        display.textContent = input.files[0].name;
+    } else {
+        display.textContent = "ファイル未選択";
+    }
 }
 
 function searchAddress() {
@@ -237,21 +298,40 @@ function searchAddress() {
 }
 
 function toggleLoginUI() {
-    const form = document.getElementById("login-form");
-    form.style.display = (form.style.display === "none") ? "block" : "none";
+    const loginForm = document.getElementById("login-form");
+    const reportForm = document.getElementById("report-form");
+    if (auth.currentUser) {
+        loginForm.style.display = "none";
+        reportForm.style.display = (reportForm.style.display === "none") ? "block" : "none";
+    } else {
+        reportForm.style.display = "none";
+        loginForm.style.display = (loginForm.style.display === "none") ? "block" : "none";
+    }
 }
 
 auth.onAuthStateChanged(user => {
-    document.getElementById("report-form").style.display = user ? "block" : "none";
-    document.getElementById("login-status").textContent = user ? "ログイン中" : "投稿はメンバーのみです。";
+    const loginForm = document.getElementById("login-form");
+    const reportForm = document.getElementById("report-form");
+    const statusText = document.getElementById("login-status");
+    if (user) {
+        loginForm.style.display = "none";
+        reportForm.style.display = "block";
+        statusText.textContent = "ログイン中 (" + user.email + ")";
+    } else {
+        reportForm.style.display = "none";
+        statusText.textContent = "投稿はメンバーのみです。";
+    }
 });
 
 function login() {
-    auth.signInWithEmailAndPassword(document.getElementById("email").value, document.getElementById("password").value)
-    .catch(() => alert("ログイン失敗"));
+    const email = document.getElementById("email").value;
+    const pass = document.getElementById("password").value;
+    auth.signInWithEmailAndPassword(email, pass).catch(error => alert("ログイン失敗: " + error.message));
 }
 
-function logout() { auth.signOut(); }
+function logout() { 
+    auth.signOut().then(() => alert("ログアウトしました"));
+}
 
 function listenForReports() {
     db.collection("reports").onSnapshot(snapshot => {
@@ -262,10 +342,8 @@ function listenForReports() {
                     position: { lat: d.latitude, lng: d.longitude },
                     map: map
                 });
-
                 const imageHtml = d.imageUrl ? `<img src="${d.imageUrl}" class="preview">` : "";
                 const time = d.reportTimestamp ? d.reportTimestamp.toDate().toLocaleString() : "不明";
-
                 const info = new google.maps.InfoWindow({
                     content: `
                         <div style="max-width:200px; font-size:13px;">
@@ -286,8 +364,12 @@ async function submitReport() {
     const btn = document.getElementById("submit-btn");
     const descInput = document.getElementById("description");
     const fileInput = document.getElementById("image-input");
+    const fileNameDisplay = document.getElementById("file-name");
 
-    if (!selectedLocation || !descInput.value.trim()) { alert("場所と詳細を入力してください"); return; }
+    if (!selectedLocation || !descInput.value.trim()) { 
+        alert("地図をクリックして場所を選び、詳細を入力してください"); 
+        return; 
+    }
 
     btn.disabled = true;
     try {
@@ -311,9 +393,12 @@ async function submitReport() {
         alert("投稿しました");
         descInput.value = "";
         fileInput.value = "";
+        fileNameDisplay.textContent = "ファイル未選択"; // リセット
         if (tempMarker) tempMarker.setMap(null);
         selectedLocation = null;
-    } catch (e) { alert("エラーが発生しました"); }
+    } catch (e) { 
+        alert("エラーが発生しました: " + e.message); 
+    }
     btn.disabled = false;
 }
 </script>
